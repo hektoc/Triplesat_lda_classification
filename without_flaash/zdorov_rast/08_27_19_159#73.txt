@@ -1,0 +1,7 @@
+ENVI ASCII Plot File [Tue Jan 19 15:29:35 2021]
+Column 1: Wavelength
+Column 2: NNDiffusePanSharpening_cropped.dat (3655,1843)~~2##255,0,0
+  475.000000   51.091965
+  548.000000   41.714630
+  634.000000   25.130632
+  834.000000  101.213005
