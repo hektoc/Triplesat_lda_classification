@@ -1,66 +1,68 @@
+import lda_classificate.default_indexes
+import numpy as np
+from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis, LinearDiscriminantAnalysis
+import os
+from lda_classificate.LdaLearnClass  import LdaLearnClass
+
 class LdaClassificate:
     """
     Класс для проведения классификации методом LDA
     """
-    import os
-
-    def __init__(self, files_source: str = (os.path.dirname(os.path.realpath(__file__)) +
-                                            "..\\flaash2_skip_some_points\\*.txt")):
-
-        import lda_classificate.default_indexes
-        import glob
-        import numpy as np
-        from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis, LinearDiscriminantAnalysis
-
-
-        print(files_source)
-
+    def __init__(self):
+        self.lern_classes = []
+        self.indexes = {}
+        self.colours = None
+        self.sp_max_cor = None
+        self.default_indexes = lda_classificate.default_indexes.default_indexes
+        self.functions = []
         np.seterr(all='ignore')
 
-        self.default_indexes = lda_classificate.default_indexes.default_indexes
-        self.indexes = {}
-        files = glob.glob(files_source)
-        self.lda_data = []
-        lvl = []
-
-        for name in files:
-            # print(name)
-            try:
-                self.sp = np.genfromtxt(name, skip_header=1).T
-            except:
-                # нужно сделать обработку эксепшнов
-                print(name, "SOME ERROR")
-            lvl.append(int(np.genfromtxt(name).T[1][0]))
-            self.lda_data.append(self.sp[1])
-
-        data = np.array(self.lda_data)
         self.lda = LinearDiscriminantAnalysis(n_components=3)
-        self.lda.fit(self.lda_data, lvl).transform(data)
         
         """self.lda = QuadraticDiscriminantAnalysis()
         # print(type(lvl), lvl)
         self.lda.fit(data, np.array(lvl))"""
         # exit()
-        """from numpy import arange
-        from sklearn.model_selection import GridSearchCV, RepeatedStratifiedKFold
-        # define model
-        model = LinearDiscriminantAnalysis(solver='lsqr')
-        # define model evaluation method
-        cv = RepeatedStratifiedKFold(n_splits=10, n_repeats=3, random_state=1)
-        # define grid
-        grid = dict()
-        grid['shrinkage'] = arange(0, 1, 0.01)
-        # define search
-        search = GridSearchCV(model, grid, scoring='accuracy', cv=cv, n_jobs=-1, refit=True)
-        # perform the search
-        self.lda = search.fit(self.lda_data, lvl)
-        # summarize
-        print('Mean Accuracy: %.3f' % self.lda.best_score_)
-        print('Config: %s' % self.lda.best_params_)"""
 
     def predict(self, indexes: list):
         # print(f'ind_calc({type(indexes)})={indexes},\n{type(indexes[0])}')
-        return int(self.lda.predict(indexes)[0])  # int([new_sp])[0]
+        #return int(self.lda.predict(indexes)[0])  # int([new_sp])[0]
+
+        return self.lda.predict(indexes)[0]  # int([new_sp])[0]
+
+    # Добавляем обучающий класс
+    def add_learn_class(self, added_class: LdaLearnClass):
+        self.lern_classes.append(added_class)
+
+    def get_lern_classes_names_and_colours(self):
+        if self.colours is None:
+            self.colours = { lern_class.name: lern_class.colour for lern_class in self.lern_classes}
+        return self.colours
+
+    def train(self):
+        training_data = []
+        target_values = []
+        # class_num = 1
+        '''sp_max = 1
+        sp_max = max(i.sp_max for i in self.lern_classes)
+        self.sp_max_cor = 255/sp_max
+        if sp_max > 255:
+            func = lambda x: int(x * self.sp_max_cor)
+        else:
+            func = lambda x: x
+'''
+        for learn_class in self.lern_classes:
+            for pixel_data in learn_class.sp:
+                target_values.append(learn_class.name)  # class_num
+                training_data.append(self.find_indexes(b=pixel_data[0],
+                                                       g=pixel_data[1],
+                                                       r=pixel_data[2],
+                                                       ir=pixel_data[3]))
+            # class_num += 1
+        self.functions = []
+        self.lda.fit(training_data, target_values)
+        # exit()
+        # self.lda.fit(training_data, target_values)#.transform(training_data)
 
     def index_init(self, index_dict: dict):
         """Пример задания коэффициентов
@@ -90,8 +92,9 @@ class LdaClassificate:
                 # тут по-хорошему нужно сделать проверку синтаксиса,
                 # чтобы в формулах не было индексов, не заданных во входных данных... но да ладно)
                 self.indexes[name] = index
+        #self.indexes_compile()
 
-    def _index_count(self, index: dict, check_variable: bool = False, **kwargs):
+    def _index_count(self, index: dict, name: str, check_variable: bool = False, **kwargs):
         """
         Подсчитывает один индекс
 
@@ -106,7 +109,6 @@ class LdaClassificate:
         }"""
         import sys
         import numpy as np
-
         # тут пишем пакеты, необходимые для подсчёта индексов. Они передаются в eval через locals()
         import math
 
@@ -119,6 +121,14 @@ class LdaClassificate:
                 kwargs[value] = np.float64(0)
 
         try:
+            import math
+            #print(self.functions[name])
+            result = self.functions[name](b=kwargs['b'],
+                                         g=kwargs['g'],
+                                         r=kwargs['r'],
+                                         ir=kwargs['ir'])
+            # print(result)
+            return result
             return eval(index['return'], locals(), kwargs)
         # Проверить возможные эксепшны и убрать этот позор
         except:
@@ -126,31 +136,43 @@ class LdaClassificate:
             print('index=', index, '\nkwargs=', kwargs)
             # Функционал выпилен, но может пригодиться при модернизации
             if not check_variable:
-                return self._index_count(index, True, kwargs)
+                return self._index_count(index, name, True, kwargs)
             else:
                 print(f'Ошибка пересчёта индекса {index}\nkwargs={kwargs}')
         return False
 
     def find_indexes(self, **kwargs):
         """Подсчитывает все выбранные индексы для выбранного 'пикселя'"""
-        import numpy as np
-
+        import numpy as n
         cur_indexes = []
-        # print('find_indexes kwargs=', kwargs)
-        # print(self.indexes)
         for name, index in self.indexes.items():
-            # print('index=', index)
-            index_value = self._index_count(index, False, **kwargs)
-            # print(index_value)
+            index_value = self._index_count(index, name, False, **kwargs)
             if np.isnan(index_value):
                 cur_indexes.append(0)
                 return False
             elif np.isinf(index_value):
                 cur_indexes.append(10000)
             else:
-                # if index_value <0:
-                #    cur_indexes.append(0)
-                # else:
                 cur_indexes.append(index_value)
         return cur_indexes
 
+    def indexes_compile(self):
+
+        import math
+        code = ''
+        for name, val in self.indexes.items():
+            # 'def {name}({",".join(str(i) for i in val["in_values"])}): ' \
+            code += \
+                f"""
+import math
+#from numba import jit
+#@jit(nopython=True, parallel=True)
+def {name}(b,g,r,ir): 
+    # import math
+    global math
+    return {val["return"]}\n"""
+        #print(code)
+        # exec(code)
+        exec(code, globals(), locals())
+        self.functions = locals()
+        #print('Компиляция прошла')
